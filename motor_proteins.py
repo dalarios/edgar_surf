@@ -329,7 +329,7 @@ def showOptimizedParameters(N_p, N_m, D):
 
     global optimizedParameters
     # Print the optimized parameters
-    print("The theoretical model that best fits the experimental data has the following parameters. These optimized parameters were calculated using the provided initial guesses:")
+    print("The theoretical model that best fits the experimental data has the following parameters. These optimized parameters were calculated using the expected values as initial guesses:")
     print()
     print("k_TL:", optimizedParameters[0])
     print("k_TX:", optimizedParameters[1])
@@ -346,7 +346,7 @@ def showOptimizedParameters(N_p, N_m, D):
     optimizedModel = solve_ODE(optimizedParameters, N_p, N_m, D) # Generate the theoretical curve, by using the optimized parameters to solve the ODE. 
     T = np.linspace(0, 5000, len(proteinConcentration_nM_List)) # Same size as the experimental data of the protein concentration
     print()
-    print("This is the model whose optimized parameters were found using the provided initial guesses:")
+    print("This is the model whose optimized parameters were found using the expected values as initial guesses:")
     plt.figure(figsize=(10, 6))  
     plt.plot(T, proteinConcentration_nM_List, label='Experimental Curve', linestyle='--', color='orange')
     plt.plot(T, optimizedModel, label='Theoretical Curve') 
@@ -375,11 +375,10 @@ def runParameterOptimization(initial_guesses, N_p, N_m, D, theory_file_name):
 
     print("RANDOM initial guesses will now be used to calculate the parameters that make the theoretical model best fit the experimental data.")
     print()
-    for i in range(10):
+    for i in range(100):
 
         try:
-            print(i + 1, " sets of optimized parameters have been found so far")
-
+            
             """ The following line generates 11 random float values. Each of the PROVIDED initial guesses is used as the
             mean value of a normal distribution. The standard deviation (SD) of this normal distribution is proportional
             to each of the PROVIDED initial guesses (in this case, the SD is always 10% the value of each PROVIDED initial guess.)
@@ -391,7 +390,7 @@ def runParameterOptimization(initial_guesses, N_p, N_m, D, theory_file_name):
             newRow = SSE_value + currentOptimizedParameters_List + knownParameters # Combine 3 Python lists into a single list. This exact order is very important.
             parameters_df.loc[len(parameters_df)] = newRow # Add a new row of optimized parameters to the DataFrame. Also add the SSE value.
             
-            if (i % 3 == 0):
+            if (i % 33 == 0):
                 optimizedParameters = np.array([]) # Clear the contents of the global variable
                 optimizedParameters = currentOptimizedParameters
                 print("This is an example of a model that has optimal parameters. These optimal parameters were found using RANDOM initial guesses:")
@@ -491,6 +490,7 @@ def compareTwoMotorProteins():
     minSSE_row_without_SSE_1 = minSSE_row_1[minSSE_row_1 != minSSE_Value_1] # Extract the other values found in the same row (NOT including the SSE value)
     minSSE_row_with_optimized_parameters_1 = minSSE_row_without_SSE_1[:-3] # Only extract the optimized parameters (the known parameters are being ignored)
 
+
     theory_df_2 = pd.read_csv(theory_file_name_k401) # Load the optimized parameters, known parameters, and SSE values of each of the 100 theoretical models
     minSSE_Value_2 = theory_df_2["SSE Value"].min() # Find the least SSE value out of the 100 SSE values
 
@@ -500,20 +500,41 @@ def compareTwoMotorProteins():
     minSSE_row_without_SSE_2 = minSSE_row_2[minSSE_row_2 != minSSE_Value_2] # Extract the other values found in the same row (NOT including the SSE value)
     minSSE_row_with_optimized_parameters_2 = minSSE_row_without_SSE_2[:-3] # Only extract the optimized parameters (the known parameters are being ignored)
 
+
     difference = np.subtract(minSSE_row_with_optimized_parameters_2, minSSE_row_with_optimized_parameters_1) # Do an element-wise substraction of 2 NumPy arrays
     absolute_value_difference = np.abs(difference) # Get the absolute value of the all the elements of the resultant NumPy array
-    fractionalChangeVec = np.divide(absolute_value_difference, minSSE_row_with_optimized_parameters_1) # Do an element-wise divison of 2 NumPy arrays
-    percentageChangeVec = fractionalChangeVec * 100 # Multiply all the elements of the NumPy array times 100.
-    print("For the BEST found model (model with the least SSE), this is the percentage change of the optimized parameters between ", motorProtein1, " and ",  motorProtein2, ":")
-    print()
-
-    parameter_names_comparison = ["k_TL", "k_TX", "R_p", "tau_m", "K_TL", "R", "k_deg", "X_p", "K_p", "tau_0", "tau_f"]
     
-    for param, value in zip(parameter_names_comparison, percentageChangeVec):
-        print(param + ":   " + str(value)+ "%")
+    # Handle the edge case of tau_0 
+    minSSE_row_with_optimized_parameters_1_asList = minSSE_row_with_optimized_parameters_1.tolist() # These are all the denominators
+    absolute_value_difference_as_list = absolute_value_difference.tolist() # These are all the numerators
 
+    if minSSE_row_with_optimized_parameters_1_asList[-2] == 0 and absolute_value_difference_as_list[-2] == 0: # Handle the 0/0 edge case of tau_0
 
+        fractionalChangeVec = np.divide(absolute_value_difference, minSSE_row_with_optimized_parameters_1) # Do an element-wise divison of 2 NumPy arrays
+        fractionalChangeList = fractionalChangeVec.tolist() # Convert the NumPy array to a Python list
+        
+        del fractionalChangeList[9]
+        fractionalChangeList.insert(9, 0) # The percentage change of (0/0) should be 0%
+        percentageChangeVec = fractionalChangeList * 100 # Multiply all the elements of the NumPy array times 100.
+        
+        print("For the BEST found model (model with the least SSE), this is the percentage change of the optimized parameters between ", motorProtein1, " and ",  motorProtein2, ":")
+        print()
+        parameter_names_comparison = ["k_TL", "k_TX", "R_p", "tau_m", "K_TL", "R", "k_deg", "X_p", "K_p", "tau_0", "tau_f"]
+        
+        for param, value in zip(parameter_names_comparison, percentageChangeVec):
+            print(param + ":   " + str(value)+ "%")
 
+    # Carry out the normal procedure for the rest of the cases 
+    else:
+        fractionalChangeVec = np.divide(absolute_value_difference, minSSE_row_with_optimized_parameters_1) # Do an element-wise divison of 2 NumPy arrays
+        percentageChangeVec = fractionalChangeVec * 100 # Multiply all the elements of the NumPy array times 100.
+        print("For the BEST found model (model with the least SSE), this is the percentage change of the optimized parameters between ", motorProtein1, " and ",  motorProtein2, ":")
+        print()
+        parameter_names_comparison = ["k_TL", "k_TX", "R_p", "tau_m", "K_TL", "R", "k_deg", "X_p", "K_p", "tau_0", "tau_f"]
+        
+        for param, value in zip(parameter_names_comparison, percentageChangeVec):
+            print(param + ":   " + str(value)+ "%")
+    
 
 
 # Part 3
@@ -643,7 +664,7 @@ def reset():
     timeValues_List.clear()
     meanIntensity_List.clear()
     proteinConcentration_List.clear()
-    #proteinConcentration_nM_List.clear()
+    proteinConcentration_nM_List.clear()
     numberOfProteinMolecules_List.clear()
     rateOfChangeProteinMolecules_List.clear()
 
